@@ -2,28 +2,26 @@
 author: Vineeth Suhas Challagali
 
 Scraping the ranks of various basketball teams in NCAA tournament for Kaggle competetion.
-
-RUN: python scrape_ranks.py -s <yyyy-mm-dd> -e <yyyy-mm-dd>
 """
-import os
+
 import re
 import time
 import datetime
 import argparse
 from contextlib import contextmanager
 
-import numpy as np
-import pandas as pd
-from bs4 import BeautifulSoup
 from selenium import webdriver
+# from selenium.webdriver.support.ui import WebDriverWait
+# from selenium.webdriver.common.by import By
+# from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.firefox.options import Options
 
+from bs4 import BeautifulSoup
+import numpy as np
+import pandas as pd
 
-DATA_DIR = '/Users/vineethsuhas/vineeth/handsOn/hackathons/kaggle/GoogleMLCompNCAAM/data/raw/'
-OUTPUT_FOLDER = DATA_DIR + "scraped_ranks/"
-if not os.path.exists(OUTPUT_FOLDER):
-    os.mkdir(OUTPUT_FOLDER)
 
+OUTPUT_PATH = "/Users/vineethsuhas/vineeth/handsOn/hackathons/kaggle/GoogleMLCompNCAAM/data/raw/scraped_ranks/"
 BASE_URL = "https://www.masseyratings.com/ranks?s=cb&dt={0}"
 HEADER_HTML_CLASS = "headrow headrepeat"
 BODY_HTML_CLASS = re.compile(r'bodyrow tr[0-9]')
@@ -34,10 +32,10 @@ def get_url(dt):
 
 
 def get_dates(sdt, edt):
-    dates = [datetime.datetime.date(sdt)]
+    dates = [sdt]
     while sdt < edt:
         sdt = sdt + datetime.timedelta(days=7)
-        dates.append(datetime.datetime.date(sdt))
+        dates.append(sdt)
     return dates
 
 
@@ -71,64 +69,69 @@ def get_body(soup):
     return np.array(rows)
 
 
-def scrape_website(sd, url):
-    print("Scraping the Website for URL .... {0}".format(url))
+# def scrape_website(url):
+#     with scraping_driver() as sd:
+#         sd.get(url)
+#         page_data = sd.page_source
+#         souped_data = BeautifulSoup(page_data, 'lxml')
+#
+#     header = get_header(souped_data)
+#     body = get_body(souped_data)
+#     result = pd.DataFrame(body, columns=header)
+#     return result
 
-    tries = 0
-    retry = 3
+
+def scrape_website(sd, url):
     sd.get(url)
     page_data = sd.page_source
     souped_data = BeautifulSoup(page_data, 'lxml')
-
-    while not souped_data.find('tr', class_=HEADER_HTML_CLASS) and tries < retry:
-        print("Failed!! sleeping and Retry attempt {0}".format(tries))
-        time.sleep(20)
-        tries += 1
-
-        sd.get(url)
-        page_data = sd.page_source
-        souped_data = BeautifulSoup(page_data, 'lxml')
-
+    
+    if not souped_data.find('tr', class_=HEADER_HTML_CLASS):
+        import ipdb; ipdb.set_trace()
     header = get_header(souped_data)
     body = get_body(souped_data)
     result = pd.DataFrame(body, columns=header)
     return result
 
 
-def write_to_file(df):
-    file_name = "ranks_" + str(date).replace('-', '_') + '.csv'
-    file_path = OUTPUT_FOLDER + file_name
-
-    print("Writing DataFrame to file ..... {0}".format(file_name))
-    df.to_csv(file_path)
-
-
 if __name__ == '__main__':
-    # Argument Parsing for start and end dates
+    import ipdb; ipdb.set_trace()
     parser = argparse.ArgumentParser()
     parser.add_argument('-s',
                         '--start-date',
                         type=str,
-                        help='Start Date For Scraping: yyyy-mm-dd',
+                        help='Start Date For Scraping',
                         required=True)
     parser.add_argument('-e',
                         '--end-date',
                         type=str,
-                        help='End Date For Scraping: yyyy-mm-dd',
+                        help='End Date For Scraping',
                         required=True)
 
-    # Get the arguments
     args = parser.parse_args()
+
     start_date = datetime.datetime.strptime(args.start_date, '%Y-%m-%d')
     end_date = datetime.datetime.strptime(args.end_date, '%Y-%m-%d')
 
-    # Get all the dates for which the ranks has to be fetched
     dates = get_dates(start_date, end_date)
 
-    # For each date, fetch the ranks and write to a file.
     with scraping_driver() as sd:
-        for date in dates:
+
+        for i, date in enumerate(dates):
             url = get_url(date)
+
+            print("Started Scraping the Website {0}".format(url))
             result_df = scrape_website(sd, url)
-            write_to_file(result_df)
+            print("Done scraping the Website {0}".format(url))
+
+            file_name = "ranks_" + str(date).replace('-', '_') + '.csv'
+            file_path = OUTPUT_PATH + file_name
+
+            print("Started writing the scraped data to {0}".format(file_name))
+            result_df.to_csv(file_path)
+            print("Done writing the scraped data to {0}".format(file_name))
+            
+            #if (i+1) % 5 == 0:
+            #    print("Waiting for sometime.....")
+            #    time.sleep(30)
 
